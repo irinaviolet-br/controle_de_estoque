@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+build/
+build_assets/
+dist/
+*.spec
+planilhas/*.xlsx
