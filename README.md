@@ -1,1 +1,42 @@
-# controle_de_estoque
+# Controle de Estoque Labpat
+
+Aplicação desktop em Python/Tkinter para registrar movimentações de estoque do Labpat
+em planilhas do Excel.
+
+## Pré-requisitos
+
+* Python 3.10 ou superior
+* Dependências listadas em `requirements.txt`
+
+Instale as dependências com:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Executando
+
+Na pasta raiz do projeto execute:
+
+```bash
+python main.py
+```
+
+Crie uma pasta chamada `planilhas/` (já incluída vazia no repositório) e coloque
+ali as planilhas reais do laboratório (`ESTOQUE - *.xlsx` e `LOG.xlsx`). Caso
+esteja configurando o sistema pela primeira vez, você pode deixar a pasta vazia:
+ao executar o aplicativo, os arquivos serão gerados automaticamente com o
+formato correto.
+
+> **Importante:** As planilhas de estoque são protegidas com a senha `789` para
+> evitar edições diretas no Excel. O aplicativo aplica essa proteção
+> automaticamente ao criar ou atualizar os arquivos.
+
+## Funcionalidades
+
+* Interface pública com registro de saídas e scanner de código de barras.
+* Interface de gestor acessada com o PIN `2468`, permitindo entradas, saídas,
+  cadastro de novos produtos e uso avançado do scanner.
+* Integração com planilhas de estoque, respeitando a estrutura de colunas
+  fornecida (cabeçalho na linha 6 e dados a partir da linha 7).
+* Registro automático no arquivo `LOG.xlsx` de todas as movimentações.
