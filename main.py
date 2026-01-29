@@ -727,37 +727,54 @@ class InventoryService:
     def get_manager_email(self) -> str:
         return self.settings.manager_email
 
-    def get_sheet_preview(self, name: str, start_row: int = 5) -> Tuple[List[str], List[List[str]]]:
+    def get_sheet_preview(
+        self, name: str, start_row: int = 5
+    ) -> Tuple[List[str], List[Tuple[List[str], str]]]:
         path = self.get_workbook_path(name)
         try:
             wb = load_workbook(path, read_only=True, data_only=True)
         except (InvalidFileException, OSError) as exc:
             raise ValueError(f"Não foi possível abrir a planilha selecionada: {exc}") from exc
         ws = wb.active
-        rows: List[Tuple[object, ...]] = []
+        header_row = 1 if name == "LOG" else STOCK_HEADER_ROW
+        data_start = max(start_row, header_row + 1)
+
         max_col = 0
-        for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row, values_only=True):
-            rows.append(row)
+        for row in ws.iter_rows(min_row=header_row, max_row=ws.max_row, values_only=True):
             for idx, value in enumerate(row, start=1):
                 if value is None:
                     continue
                 if isinstance(value, str) and not value.strip():
                     continue
                 max_col = max(max_col, idx)
-        wb.close()
 
         if max_col == 0:
             return [], []
+
         columns = [get_column_letter(idx) for idx in range(1, max_col + 1)]
-        formatted_rows: List[List[str]] = []
-        for row in rows:
+        formatted_rows: List[Tuple[List[str], str]] = []
+
+        header_values = [
+            self._format_cell(ws.cell(row=header_row, column=idx).value)
+            for idx in range(1, max_col + 1)
+        ]
+        formatted_rows.append((header_values, "headers"))
+
+        data_rows = list(
+            ws.iter_rows(min_row=data_start, max_row=ws.max_row, values_only=True)
+        )
+        data_index = 0
+        for row in data_rows:
             values = [
                 self._format_cell(row[idx]) if idx < len(row) else ""
                 for idx in range(max_col)
             ]
             if not any(value.strip() for value in values):
                 continue
-            formatted_rows.append(values)
+            tag = "even" if data_index % 2 == 0 else "odd"
+            data_index += 1
+            formatted_rows.append((values, tag))
+        wb.close()
         return columns, formatted_rows
 
     def _format_cell(self, value: object) -> str:
@@ -1223,31 +1240,32 @@ class NewProductWindow(tk.Toplevel):
         self.stock_name = stock_name
         self.title("Cadastrar novo produto")
         self.resizable(False, False)
+        self.columnconfigure(0, weight=1)
 
         ttk.Label(self, text="Código de Barras").grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
-        self.barcode_entry = ttk.Entry(self)
+        self.barcode_entry = ttk.Entry(self, width=60)
         self.barcode_entry.grid(row=1, column=0, padx=10, pady=(0, 5), sticky="we")
 
         ttk.Label(self, text="Produto").grid(row=2, column=0, padx=10, pady=(5, 0), sticky="w")
-        self.product_entry = ttk.Entry(self)
+        self.product_entry = ttk.Entry(self, width=60)
         self.product_entry.grid(row=3, column=0, padx=10, pady=(0, 5), sticky="we")
 
         ttk.Label(self, text="Fornecedor").grid(row=4, column=0, padx=10, pady=(5, 0), sticky="w")
-        self.supplier_entry = ttk.Entry(self)
+        self.supplier_entry = ttk.Entry(self, width=60)
         self.supplier_entry.grid(row=5, column=0, padx=10, pady=(0, 5), sticky="we")
 
         ttk.Label(self, text="Estoque crítico").grid(row=6, column=0, padx=10, pady=(5, 0), sticky="w")
-        self.critical_entry = ttk.Entry(self)
+        self.critical_entry = ttk.Entry(self, width=60)
         self.critical_entry.insert(0, "0")
         self.critical_entry.grid(row=7, column=0, padx=10, pady=(0, 5), sticky="we")
 
         ttk.Label(self, text="Modo do estoque").grid(row=8, column=0, padx=10, pady=(5, 0), sticky="w")
-        self.mode_combo = ttk.Combobox(self, values=["UN", "ML"], state="readonly")
+        self.mode_combo = ttk.Combobox(self, values=["UN", "ML"], state="readonly", width=57)
         self.mode_combo.current(0)
         self.mode_combo.grid(row=9, column=0, padx=10, pady=(0, 10), sticky="we")
 
         ttk.Label(self, text="Medida").grid(row=10, column=0, padx=10, pady=(0, 0), sticky="w")
-        self.measure_entry = ttk.Entry(self)
+        self.measure_entry = ttk.Entry(self, width=60)
         self.measure_entry.grid(row=11, column=0, padx=10, pady=(0, 10), sticky="we")
 
         btn_frame = ttk.Frame(self)
@@ -1471,15 +1489,6 @@ class InventoryApp:
         frame = tk.Frame(self.root, bg="white")
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        LogoBanner(frame).pack(pady=(0, 10))
-
-        tk.Label(
-            frame,
-            text="Controle de Estoque",
-            font=("Segoe UI", 14, "bold"),
-            bg="white",
-        ).pack(pady=(0, 10))
-
         toolbar = self._build_toolbar(frame)
         ttk.Button(
             toolbar, text="Registrar saída", command=self._public_register_exit
@@ -1500,14 +1509,6 @@ class InventoryApp:
             activeforeground="white",
         ).pack(side="right", padx=5)
 
-        self._build_sheet_preview(frame)
-
-    def _build_manager_interface(self):
-        self.manager_mode = True
-        self._clear_window()
-        frame = tk.Frame(self.root, bg="white")
-        frame.pack(fill="both", expand=True, padx=20, pady=20)
-
         LogoBanner(frame).pack(pady=(0, 10))
 
         tk.Label(
@@ -1516,6 +1517,14 @@ class InventoryApp:
             font=("Segoe UI", 14, "bold"),
             bg="white",
         ).pack(pady=(0, 10))
+
+        self._build_sheet_preview(frame)
+
+    def _build_manager_interface(self):
+        self.manager_mode = True
+        self._clear_window()
+        frame = tk.Frame(self.root, bg="white")
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         toolbar = self._build_toolbar(frame)
         ttk.Button(
@@ -1550,6 +1559,15 @@ class InventoryApp:
             activebackground="#3620a0",
             activeforeground="white",
         ).pack(side="right", padx=5)
+
+        LogoBanner(frame).pack(pady=(0, 10))
+
+        tk.Label(
+            frame,
+            text="Controle de Estoque",
+            font=("Segoe UI", 14, "bold"),
+            bg="white",
+        ).pack(pady=(0, 10))
 
         self._build_sheet_preview(frame)
 
@@ -1590,9 +1608,21 @@ class InventoryApp:
         preview_frame.columnconfigure(0, weight=1)
         preview_frame.rowconfigure(0, weight=1)
 
-        tree = ttk.Treeview(preview_frame, columns=(), show="headings")
+        style = ttk.Style()
+        style.configure("SheetPreview.Treeview", rowheight=24)
+        style.configure(
+            "SheetPreview.Treeview.Heading",
+            background="#FFCC80",
+            foreground="black",
+        )
+
+        tree = ttk.Treeview(preview_frame, columns=(), show="headings", style="SheetPreview.Treeview")
         tree.grid(row=0, column=0, sticky="nsew")
         self.sheet_preview_tree = tree
+
+        tree.tag_configure("headers", background="#FFE0B2")
+        tree.tag_configure("even", background="white")
+        tree.tag_configure("odd", background="#FFF3E0")
 
         y_scroll = ttk.Scrollbar(preview_frame, orient="vertical", command=tree.yview)
         y_scroll.grid(row=0, column=1, sticky="ns")
@@ -1633,8 +1663,8 @@ class InventoryApp:
             self.sheet_preview_tree.heading(col, text=col)
             self.sheet_preview_tree.column(col, width=140, anchor="w")
         self.sheet_preview_tree.delete(*self.sheet_preview_tree.get_children())
-        for row in rows:
-            self.sheet_preview_tree.insert("", "end", values=row)
+        for values, tag in rows:
+            self.sheet_preview_tree.insert("", "end", values=values, tags=(tag,))
 
     # -- event handlers --------------------------------------------------
 
