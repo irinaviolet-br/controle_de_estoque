@@ -29,6 +29,7 @@ from tkinter import messagebox, simpledialog, ttk
 from email.message import EmailMessage
 from openpyxl import Workbook, load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
 
 try:
@@ -726,6 +727,48 @@ class InventoryService:
     def get_manager_email(self) -> str:
         return self.settings.manager_email
 
+    def get_sheet_preview(self, name: str, start_row: int = 5) -> Tuple[List[str], List[List[str]]]:
+        path = self.get_workbook_path(name)
+        try:
+            wb = load_workbook(path, read_only=True, data_only=True)
+        except (InvalidFileException, OSError) as exc:
+            raise ValueError(f"Não foi possível abrir a planilha selecionada: {exc}") from exc
+        ws = wb.active
+        rows: List[Tuple[object, ...]] = []
+        max_col = 0
+        for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row, values_only=True):
+            rows.append(row)
+            for idx, value in enumerate(row, start=1):
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                max_col = max(max_col, idx)
+        wb.close()
+
+        if max_col == 0:
+            return [], []
+        columns = [get_column_letter(idx) for idx in range(1, max_col + 1)]
+        formatted_rows: List[List[str]] = []
+        for row in rows:
+            values = [
+                self._format_cell(row[idx]) if idx < len(row) else ""
+                for idx in range(max_col)
+            ]
+            if not any(value.strip() for value in values):
+                continue
+            formatted_rows.append(values)
+        return columns, formatted_rows
+
+    def _format_cell(self, value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, _dt.datetime):
+            return value.strftime("%d/%m/%Y %H:%M:%S")
+        if isinstance(value, _dt.date):
+            return value.strftime(DATE_FORMAT)
+        return str(value)
+
     # -- authentication -------------------------------------------------
 
     def verify_manager_pin(self, pin: str) -> bool:
@@ -1043,7 +1086,13 @@ class ManualMovementWindow(tk.Toplevel):
             f"Operação bem-sucedida.\n\nSaldo anterior: {previous:g}\nSaldo atual: {updated:g}",
             parent=self,
         )
-        self.destroy()
+        if self.product:
+            self.product.stock = updated
+            self.stock_label.configure(
+                text=f"Estoque atual: {updated:g} {self.product.mode.upper()}"
+            )
+        self.quantity_entry.delete(0, tk.END)
+        self.quantity_entry.focus_set()
 
 
 class ScannerWindow(tk.Toplevel):
@@ -1158,7 +1207,13 @@ class ScannerWindow(tk.Toplevel):
             f"Operação bem-sucedida.\n\nSaldo anterior: {previous:g}\nSaldo atual: {updated:g}",
             parent=self,
         )
-        self.destroy()
+        self.product = None
+        self.barcode_var.set("")
+        self.product_label.configure(text="-")
+        self.quantity_entry.delete(0, tk.END)
+        if self.date_var is not None:
+            self.date_var.set("")
+        self.barcode_entry.focus_set()
 
 
 class NewProductWindow(tk.Toplevel):
@@ -1199,6 +1254,12 @@ class NewProductWindow(tk.Toplevel):
         btn_frame.grid(row=12, column=0, pady=10)
         ttk.Button(btn_frame, text="Salvar", command=self._save).grid(row=0, column=0, padx=5)
         ttk.Button(btn_frame, text="Cancelar", command=self.destroy).grid(row=0, column=1, padx=5)
+
+        self.update_idletasks()
+        width = self.winfo_reqwidth() * 3
+        height = self.winfo_reqheight()
+        self.geometry(f"{width}x{height}")
+        self.minsize(width, height)
 
     def _save(self):
         barcode = self.barcode_entry.get().strip()
@@ -1389,9 +1450,12 @@ class InventoryApp:
         self.root = root
         self.service = service
         self.manager_mode = False
+        self.sheet_preview_tree: Optional[ttk.Treeview] = None
+        self.sheet_selection_vars: Dict[str, tk.BooleanVar] = {}
         self.root.title(APP_TITLE)
-        self.root.resizable(False, False)
+        self.root.resizable(True, True)
         self.root.configure(bg="white")
+        self.root.geometry("1200x700")
 
         self._build_public_interface()
 
@@ -1405,9 +1469,9 @@ class InventoryApp:
         self.manager_mode = False
         self._clear_window()
         frame = tk.Frame(self.root, bg="white")
-        frame.pack(padx=20, pady=20)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        LogoBanner(frame).pack(pady=(0, 15))
+        LogoBanner(frame).pack(pady=(0, 10))
 
         tk.Label(
             frame,
@@ -1416,36 +1480,35 @@ class InventoryApp:
             bg="white",
         ).pack(pady=(0, 10))
 
+        toolbar = self._build_toolbar(frame)
         ttk.Button(
-            frame, text="Registrar saída", width=25, command=self._public_register_exit
-        ).pack(pady=5)
-        ttk.Button(frame, text="Abrir scanner", width=25, command=self._public_scanner).pack(pady=5)
+            toolbar, text="Registrar saída", command=self._public_register_exit
+        ).pack(side="left", padx=5)
+        ttk.Button(toolbar, text="Abrir scanner", command=self._public_scanner).pack(
+            side="left", padx=5
+        )
+        ttk.Button(toolbar, text="Recuperar senha", command=self._recover_password).pack(
+            side="left", padx=5
+        )
         tk.Button(
-            frame,
+            toolbar,
             text="Login",
-            width=25,
             command=self._prompt_login,
             bg="#241178",
             fg="white",
             activebackground="#3620a0",
             activeforeground="white",
-        ).pack(pady=5)
-        tk.Button(
-            frame,
-            text="Recuperar senha",
-            width=25,
-            command=self._recover_password,
-            bg="#E2FFDD",
-            activebackground="#cbecc7",
-        ).pack(pady=5)
+        ).pack(side="right", padx=5)
+
+        self._build_sheet_preview(frame)
 
     def _build_manager_interface(self):
         self.manager_mode = True
         self._clear_window()
         frame = tk.Frame(self.root, bg="white")
-        frame.pack(padx=20, pady=20)
+        frame.pack(fill="both", expand=True, padx=20, pady=20)
 
-        LogoBanner(frame).pack(pady=(0, 15))
+        LogoBanner(frame).pack(pady=(0, 10))
 
         tk.Label(
             frame,
@@ -1454,54 +1517,124 @@ class InventoryApp:
             bg="white",
         ).pack(pady=(0, 10))
 
+        toolbar = self._build_toolbar(frame)
         ttk.Button(
-            frame,
+            toolbar,
             text="Registrar entrada",
-            width=25,
             command=lambda: self._open_manual_movement(is_entry=True),
-        ).pack(pady=5)
+        ).pack(side="left", padx=5)
         ttk.Button(
-            frame,
+            toolbar,
             text="Registrar saída",
-            width=25,
             command=lambda: self._open_manual_movement(is_entry=False),
-        ).pack(pady=5)
-        ttk.Button(frame, text="Abrir scanner", width=25, command=self._manager_scanner).pack(pady=5)
-        ttk.Button(frame, text="Novo produto", width=25, command=self._new_product).pack(pady=5)
+        ).pack(side="left", padx=5)
+        ttk.Button(toolbar, text="Abrir scanner", command=self._manager_scanner).pack(
+            side="left", padx=5
+        )
+        ttk.Button(toolbar, text="Novo produto", command=self._new_product).pack(side="left", padx=5)
+        ttk.Button(toolbar, text="Abrir planilha", command=self._open_workbook_file).pack(
+            side="left", padx=5
+        )
+        ttk.Button(toolbar, text="Redefinir senha", command=self._reset_manager_password).pack(
+            side="left", padx=5
+        )
+        ttk.Button(
+            toolbar, text="Senha das planilhas", command=self._update_stock_password
+        ).pack(side="left", padx=5)
         tk.Button(
-            frame,
-            text="Abrir planilha",
-            width=25,
-            command=self._open_workbook_file,
-            bg="#E2FFDD",
-            activebackground="#cbecc7",
-        ).pack(pady=5)
-        tk.Button(
-            frame,
-            text="Redefinir senha",
-            width=25,
-            command=self._reset_manager_password,
-            bg="#E2FFDD",
-            activebackground="#cbecc7",
-        ).pack(pady=5)
-        tk.Button(
-            frame,
-            text="Senha das planilhas",
-            width=25,
-            command=self._update_stock_password,
-            bg="#E2FFDD",
-            activebackground="#cbecc7",
-        ).pack(pady=5)
-        tk.Button(
-            frame,
+            toolbar,
             text="Logout",
-            width=25,
             command=self._build_public_interface,
             bg="#241178",
             fg="white",
             activebackground="#3620a0",
             activeforeground="white",
-        ).pack(pady=5)
+        ).pack(side="right", padx=5)
+
+        self._build_sheet_preview(frame)
+
+    def _build_toolbar(self, parent: tk.Misc) -> tk.Frame:
+        toolbar = tk.Frame(parent, bg="white")
+        toolbar.pack(fill="x", pady=(0, 10))
+        return toolbar
+
+    def _build_sheet_preview(self, parent: tk.Misc) -> None:
+        selector = tk.Frame(parent, bg="white")
+        selector.pack(fill="x", pady=(0, 8))
+
+        tk.Label(
+            selector,
+            text="Visualizar planilha:",
+            bg="white",
+            font=("Segoe UI", 10, "bold"),
+        ).pack(side="left", padx=(0, 8))
+
+        self.sheet_selection_vars = {}
+        for name in self.service.list_all_planilhas():
+            var = tk.BooleanVar(value=False)
+            self.sheet_selection_vars[name] = var
+            ttk.Checkbutton(
+                selector,
+                text=name,
+                variable=var,
+                command=lambda sheet_name=name: self._on_sheet_toggle(sheet_name),
+            ).pack(side="left", padx=4)
+
+        preview_frame = tk.Frame(
+            parent,
+            bg="white",
+            highlightbackground="#4a4a4a",
+            highlightthickness=1,
+        )
+        preview_frame.pack(fill="both", expand=True)
+        preview_frame.columnconfigure(0, weight=1)
+        preview_frame.rowconfigure(0, weight=1)
+
+        tree = ttk.Treeview(preview_frame, columns=(), show="headings")
+        tree.grid(row=0, column=0, sticky="nsew")
+        self.sheet_preview_tree = tree
+
+        y_scroll = ttk.Scrollbar(preview_frame, orient="vertical", command=tree.yview)
+        y_scroll.grid(row=0, column=1, sticky="ns")
+        x_scroll = ttk.Scrollbar(preview_frame, orient="horizontal", command=tree.xview)
+        x_scroll.grid(row=1, column=0, sticky="ew")
+        tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+
+    def _on_sheet_toggle(self, sheet_name: str) -> None:
+        var = self.sheet_selection_vars.get(sheet_name)
+        if var is None:
+            return
+        if var.get():
+            for other_name, other_var in self.sheet_selection_vars.items():
+                if other_name != sheet_name:
+                    other_var.set(False)
+            self._load_sheet_preview(sheet_name)
+        else:
+            self._clear_sheet_preview()
+
+    def _clear_sheet_preview(self) -> None:
+        if not self.sheet_preview_tree:
+            return
+        for item in self.sheet_preview_tree.get_children():
+            self.sheet_preview_tree.delete(item)
+        self.sheet_preview_tree.configure(columns=())
+
+    def _load_sheet_preview(self, sheet_name: str) -> None:
+        if not self.sheet_preview_tree:
+            return
+        try:
+            columns, rows = self.service.get_sheet_preview(sheet_name)
+        except ValueError as exc:
+            messagebox.showerror(APP_TITLE, str(exc))
+            self._clear_sheet_preview()
+            return
+        self.sheet_preview_tree.configure(columns=columns)
+        for col in columns:
+            self.sheet_preview_tree.heading(col, text=col)
+            self.sheet_preview_tree.column(col, width=140, anchor="w")
+        self.sheet_preview_tree.delete(*self.sheet_preview_tree.get_children())
+        for row in rows:
+            self.sheet_preview_tree.insert("", "end", values=row)
 
     # -- event handlers --------------------------------------------------
 
