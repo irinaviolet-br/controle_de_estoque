@@ -25,6 +25,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
+import customtkinter as ctk
 
 from email.message import EmailMessage
 from openpyxl import Workbook, load_workbook
@@ -1472,7 +1473,9 @@ class InventoryApp:
         self.sheet_selection_vars: Dict[str, tk.BooleanVar] = {}
         self.root.title(APP_TITLE)
         self.root.resizable(True, True)
-        self.root.configure(bg="#f5f7fb")
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
+        self.root.configure(bg="#eef2f7")
         self.root.geometry("1200x700")
         self._configure_styles()
 
@@ -1488,9 +1491,9 @@ class InventoryApp:
         style = ttk.Style()
         style.theme_use("clam")
         style.configure(".", font=("Segoe UI", 10))
-        style.configure("App.TFrame", background="#f5f7fb")
+        style.configure("App.TFrame", background="#eef2f7")
         style.configure("Card.TFrame", background="#ffffff")
-        style.configure("Title.TLabel", background="#f5f7fb", font=("Segoe UI", 16, "bold"))
+        style.configure("Title.TLabel", background="#eef2f7", font=("Segoe UI", 16, "bold"))
         style.configure("Toolbar.TFrame", background="#ffffff")
         style.configure(
             "Toolbar.TButton",
@@ -1511,27 +1514,20 @@ class InventoryApp:
     def _build_public_interface(self):
         self.manager_mode = False
         self._clear_window()
-        frame = ttk.Frame(self.root, style="App.TFrame")
+        frame = ctk.CTkFrame(self.root, fg_color="#eef2f7", corner_radius=0)
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         toolbar = self._build_toolbar(frame)
-        ttk.Button(
-            toolbar, text="Registrar saída", command=self._public_register_exit, style="Toolbar.TButton"
-        ).pack(side="left", padx=5)
-        ttk.Button(toolbar, text="Abrir scanner", command=self._public_scanner, style="Toolbar.TButton").pack(
-            side="left", padx=5
-        )
-        ttk.Button(toolbar, text="Recuperar senha", command=self._recover_password, style="Toolbar.TButton").pack(
-            side="left", padx=5
-        )
-        tk.Button(
+        ctk.CTkButton(toolbar, text="Registrar saída", command=self._public_register_exit, fg_color="#ffffff", text_color="#1f2937", hover_color="#e5e7eb").pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Abrir scanner", command=self._public_scanner, fg_color="#ffffff", text_color="#1f2937", hover_color="#e5e7eb").pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Recuperar senha", command=self._recover_password, fg_color="#ffffff", text_color="#1f2937", hover_color="#e5e7eb").pack(side="left", padx=5)
+        ctk.CTkButton(
             toolbar,
             text="Login",
             command=self._prompt_login,
-            bg="#241178",
-            fg="white",
-            activebackground="#3620a0",
-            activeforeground="white",
+            fg_color="#2563eb",
+            hover_color="#1d4ed8",
+            text_color="white",
         ).pack(side="right", padx=5)
 
         LogoBanner(frame).pack(pady=(0, 10))
@@ -1547,43 +1543,25 @@ class InventoryApp:
     def _build_manager_interface(self):
         self.manager_mode = True
         self._clear_window()
-        frame = ttk.Frame(self.root, style="App.TFrame")
+        frame = ctk.CTkFrame(self.root, fg_color="#eef2f7", corner_radius=0)
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         toolbar = self._build_toolbar(frame)
-        ttk.Button(
-            toolbar,
-            text="Registrar entrada",
-            command=lambda: self._open_manual_movement(is_entry=True),
-            style="Toolbar.TButton",
-        ).pack(side="left", padx=5)
-        ttk.Button(
-            toolbar,
-            text="Registrar saída",
-            command=lambda: self._open_manual_movement(is_entry=False),
-            style="Toolbar.TButton",
-        ).pack(side="left", padx=5)
-        ttk.Button(toolbar, text="Abrir scanner", command=self._manager_scanner, style="Toolbar.TButton").pack(
-            side="left", padx=5
-        )
-        ttk.Button(toolbar, text="Novo produto", command=self._new_product, style="Toolbar.TButton").pack(side="left", padx=5)
-        ttk.Button(toolbar, text="Abrir planilha", command=self._open_workbook_file, style="Toolbar.TButton").pack(
-            side="left", padx=5
-        )
-        ttk.Button(toolbar, text="Redefinir senha", command=self._reset_manager_password, style="Toolbar.TButton").pack(
-            side="left", padx=5
-        )
-        ttk.Button(
-            toolbar, text="Senha das planilhas", command=self._update_stock_password, style="Toolbar.TButton"
-        ).pack(side="left", padx=5)
-        tk.Button(
+        neutral = {"fg_color": "#ffffff", "text_color": "#1f2937", "hover_color": "#e5e7eb"}
+        ctk.CTkButton(toolbar, text="Registrar entrada", command=lambda: self._open_manual_movement(is_entry=True), **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Registrar saída", command=lambda: self._open_manual_movement(is_entry=False), **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Abrir scanner", command=self._manager_scanner, **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Novo produto", command=self._new_product, **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Abrir planilha", command=self._open_workbook_file, **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Redefinir senha", command=self._reset_manager_password, **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(toolbar, text="Senha das planilhas", command=self._update_stock_password, **neutral).pack(side="left", padx=5)
+        ctk.CTkButton(
             toolbar,
             text="Logout",
             command=self._build_public_interface,
-            bg="#241178",
-            fg="white",
-            activebackground="#3620a0",
-            activeforeground="white",
+            fg_color="#2563eb",
+            hover_color="#1d4ed8",
+            text_color="white",
         ).pack(side="right", padx=5)
 
         LogoBanner(frame).pack(pady=(0, 10))
@@ -1596,8 +1574,8 @@ class InventoryApp:
 
         self._build_sheet_preview(frame)
 
-    def _build_toolbar(self, parent: tk.Misc) -> tk.Frame:
-        toolbar = ttk.Frame(parent, style="Toolbar.TFrame")
+    def _build_toolbar(self, parent: tk.Misc) -> tk.Misc:
+        toolbar = ctk.CTkFrame(parent, fg_color="#ffffff", corner_radius=12, border_width=1, border_color="#d7deea")
         toolbar.pack(fill="x", pady=(0, 10))
         return toolbar
 
