@@ -1472,8 +1472,9 @@ class InventoryApp:
         self.sheet_selection_vars: Dict[str, tk.BooleanVar] = {}
         self.root.title(APP_TITLE)
         self.root.resizable(True, True)
-        self.root.configure(bg="white")
+        self.root.configure(bg="#f5f7fb")
         self.root.geometry("1200x700")
+        self._configure_styles()
 
         self._build_public_interface()
 
@@ -1483,20 +1484,44 @@ class InventoryApp:
         for widget in self.root.winfo_children():
             widget.destroy()
 
+    def _configure_styles(self) -> None:
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure(".", font=("Segoe UI", 10))
+        style.configure("App.TFrame", background="#f5f7fb")
+        style.configure("Card.TFrame", background="#ffffff")
+        style.configure("Title.TLabel", background="#f5f7fb", font=("Segoe UI", 16, "bold"))
+        style.configure("Toolbar.TFrame", background="#ffffff")
+        style.configure(
+            "Toolbar.TButton",
+            padding=(12, 7),
+            relief="flat",
+            background="#ffffff",
+        )
+        style.map("Toolbar.TButton", background=[("active", "#eef2ff")])
+        style.configure("Selector.TLabel", background="#f5f7fb", font=("Segoe UI", 10, "bold"))
+        style.configure("SheetPreview.Treeview", rowheight=26, font=("Segoe UI", 10))
+        style.configure(
+            "SheetPreview.Treeview.Heading",
+            background="#FFCC80",
+            foreground="black",
+            font=("Segoe UI", 10, "bold"),
+        )
+
     def _build_public_interface(self):
         self.manager_mode = False
         self._clear_window()
-        frame = tk.Frame(self.root, bg="white")
+        frame = ttk.Frame(self.root, style="App.TFrame")
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         toolbar = self._build_toolbar(frame)
         ttk.Button(
-            toolbar, text="Registrar saída", command=self._public_register_exit
+            toolbar, text="Registrar saída", command=self._public_register_exit, style="Toolbar.TButton"
         ).pack(side="left", padx=5)
-        ttk.Button(toolbar, text="Abrir scanner", command=self._public_scanner).pack(
+        ttk.Button(toolbar, text="Abrir scanner", command=self._public_scanner, style="Toolbar.TButton").pack(
             side="left", padx=5
         )
-        ttk.Button(toolbar, text="Recuperar senha", command=self._recover_password).pack(
+        ttk.Button(toolbar, text="Recuperar senha", command=self._recover_password, style="Toolbar.TButton").pack(
             side="left", padx=5
         )
         tk.Button(
@@ -1511,11 +1536,10 @@ class InventoryApp:
 
         LogoBanner(frame).pack(pady=(0, 10))
 
-        tk.Label(
+        ttk.Label(
             frame,
             text="Controle de Estoque",
-            font=("Segoe UI", 14, "bold"),
-            bg="white",
+            style="Title.TLabel",
         ).pack(pady=(0, 10))
 
         self._build_sheet_preview(frame)
@@ -1523,7 +1547,7 @@ class InventoryApp:
     def _build_manager_interface(self):
         self.manager_mode = True
         self._clear_window()
-        frame = tk.Frame(self.root, bg="white")
+        frame = ttk.Frame(self.root, style="App.TFrame")
         frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         toolbar = self._build_toolbar(frame)
@@ -1531,24 +1555,26 @@ class InventoryApp:
             toolbar,
             text="Registrar entrada",
             command=lambda: self._open_manual_movement(is_entry=True),
+            style="Toolbar.TButton",
         ).pack(side="left", padx=5)
         ttk.Button(
             toolbar,
             text="Registrar saída",
             command=lambda: self._open_manual_movement(is_entry=False),
+            style="Toolbar.TButton",
         ).pack(side="left", padx=5)
-        ttk.Button(toolbar, text="Abrir scanner", command=self._manager_scanner).pack(
+        ttk.Button(toolbar, text="Abrir scanner", command=self._manager_scanner, style="Toolbar.TButton").pack(
             side="left", padx=5
         )
-        ttk.Button(toolbar, text="Novo produto", command=self._new_product).pack(side="left", padx=5)
-        ttk.Button(toolbar, text="Abrir planilha", command=self._open_workbook_file).pack(
+        ttk.Button(toolbar, text="Novo produto", command=self._new_product, style="Toolbar.TButton").pack(side="left", padx=5)
+        ttk.Button(toolbar, text="Abrir planilha", command=self._open_workbook_file, style="Toolbar.TButton").pack(
             side="left", padx=5
         )
-        ttk.Button(toolbar, text="Redefinir senha", command=self._reset_manager_password).pack(
+        ttk.Button(toolbar, text="Redefinir senha", command=self._reset_manager_password, style="Toolbar.TButton").pack(
             side="left", padx=5
         )
         ttk.Button(
-            toolbar, text="Senha das planilhas", command=self._update_stock_password
+            toolbar, text="Senha das planilhas", command=self._update_stock_password, style="Toolbar.TButton"
         ).pack(side="left", padx=5)
         tk.Button(
             toolbar,
@@ -1562,29 +1588,27 @@ class InventoryApp:
 
         LogoBanner(frame).pack(pady=(0, 10))
 
-        tk.Label(
+        ttk.Label(
             frame,
             text="Controle de Estoque",
-            font=("Segoe UI", 14, "bold"),
-            bg="white",
+            style="Title.TLabel",
         ).pack(pady=(0, 10))
 
         self._build_sheet_preview(frame)
 
     def _build_toolbar(self, parent: tk.Misc) -> tk.Frame:
-        toolbar = tk.Frame(parent, bg="white")
+        toolbar = ttk.Frame(parent, style="Toolbar.TFrame")
         toolbar.pack(fill="x", pady=(0, 10))
         return toolbar
 
     def _build_sheet_preview(self, parent: tk.Misc) -> None:
-        selector = tk.Frame(parent, bg="white")
+        selector = ttk.Frame(parent, style="App.TFrame")
         selector.pack(fill="x", pady=(0, 8))
 
-        tk.Label(
+        ttk.Label(
             selector,
             text="Visualizar planilha:",
-            bg="white",
-            font=("Segoe UI", 10, "bold"),
+            style="Selector.TLabel",
         ).pack(side="left", padx=(0, 8))
 
         self.sheet_selection_vars = {}
@@ -1600,21 +1624,13 @@ class InventoryApp:
 
         preview_frame = tk.Frame(
             parent,
-            bg="white",
-            highlightbackground="#4a4a4a",
+            bg="#ffffff",
+            highlightbackground="#c3cad8",
             highlightthickness=1,
         )
         preview_frame.pack(fill="both", expand=True)
         preview_frame.columnconfigure(0, weight=1)
         preview_frame.rowconfigure(0, weight=1)
-
-        style = ttk.Style()
-        style.configure("SheetPreview.Treeview", rowheight=24)
-        style.configure(
-            "SheetPreview.Treeview.Heading",
-            background="#FFCC80",
-            foreground="black",
-        )
 
         tree = ttk.Treeview(preview_frame, columns=(), show="headings", style="SheetPreview.Treeview")
         tree.grid(row=0, column=0, sticky="nsew")
